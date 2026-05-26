@@ -1,0 +1,241 @@
+package main
+
+//todo arquivo Go começa com um package.
+//Um package é um agrupamento de código.
+//package main = este projeto gera um executável.
+//Se fosse uma biblioteca, poderia ser package task ou package users.
+
+import (
+	//import serve para trazer código pronto de outros pacotes.
+
+	"encoding/json" //Serve para trabalhar com JSON.
+	"log"           //Serve para imprimir logs no terminal.
+	"net/http"      //Esse é o pacote HTTP nativo do Go. Permite criar servidor web sem framework externo.
+	"strings"       //Serve para manipular textos.
+	"sync"          //Serve para recursos de sincronização.
+	"time"          //Serve para trabalhar com data e hora.
+)
+
+type Task struct {
+	//type cria um novo tipo. (Tipo = Task)
+	//struct é uma estrutura de dados.
+
+	ID        int       `json:"id"`        //A tarefa tem um ID do tipo inteiro.
+	Title     string    `json:"title"`     //A tarefa tem um título do tipo texto.
+	Done      bool      `json:"done"`      //A tarefa pode estar concluída ou não.
+	CreatedAt time.Time `json:"createdAt"` //A tarefa tem uma data/hora de criação.
+
+	//Ex: Campo=ID, Tipo=int, tag='json:"id"' (como campo vai aparecer em JSON)
+}
+
+type Store struct {
+	//Store será nosso "banco de dados em memória".
+
+	mu     sync.Mutex //Mutex serve para travar e destravar acesso a um dado.
+	nextID int        //Guarda o próximo ID da tarefa.
+	tasks  []Task     //Isso é uma lista de tarefas.
+}
+
+func NewStore() *Store {
+	//func cria uma função.
+	//É uma função que cria uma nova Store.
+	//Essa função retorna um ponteiro para Store.
+	//*Store = referência para uma Store
+
+	return &Store{
+		//Isso cria uma Store e retorna o endereço dela.
+		//& = Pegue o endreço da memória.
+
+		nextID: 1,        //A primeira tarefa terá ID 1.
+		tasks:  []Task{}, //Começamos com uma lista vazia (slice vazio de task)
+	}
+}
+
+func (s *Store) ListTasks() []Task {
+	//Isso é um método.
+	//Um método é uma função ligada a um tipo.
+	//ListTasks pertence a Store.
+	//(s *Store) = receiver ->  Significa essa funçao pertence a Store.
+	// Na função Store = s. -> ex: s.tasks, s.mu...
+	//[]Task = Função retorna uma lista de Task.
+
+	s.mu.Lock()
+	//Trava o mutex
+	//s.mu.Lock() = vou mexer ou ler dados protegidos. Ninguém mais pode mexer agora.
+
+	defer s.mu.Unlock()
+	//defer = execute isso no final da função
+	//defer s.mu.Unlock() = quando a função terminar, destrave o mutex.
+
+	copied := make([]Task, len(s.tasks))
+	//"copied :=" = crie uma variável nova chamada copied
+	//O := é uma forma curta de criar variável em Go.
+	//make([]Task, len(s.tasks)) = Cria uma lista nova de Task com o mesmo tamanho de s.tasks.
+	//len(s.tasks) pega o tamanho da lista.
+	//Ex: len(s.tasks) = 3, então, make([]Task, 3) cria uma lista vazia com 3 posições.
+
+	copy(copied, s.tasks)
+	//Copia as tarefas de s.tasks para copied
+	//É uma proteção simples, para não devolver a lista interna diretamente.
+
+	return copied
+	//Retorna a cópia da lista de tarefas
+
+}
+
+func (s *Store) CreateTask(title string) Task {
+	//CreateTask é um método de Store.
+	//Ele recebe um title do tipo string.
+	//Ele retorna uma Task
+	//Parâmetro -> tittle string = A função precisa receber um título.
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	//Trava antes de mexer na lista
+	//Destrava ao terminar
+
+	task := Task{
+		ID:        s.nextID,   //Usa o próximo ID disponível.
+		Title:     title,      //Usa o título recebido pela função.
+		Done:      false,      //A tarefa começa como não concluída.
+		CreatedAt: time.Now(), //Define a data/hora atual.
+	}
+
+	s.nextID++
+	//Incrementando ID
+	//Isso aumenta nextID em 1.
+	//s.nextID++ -> s.nextID = s.nextID + 1
+
+	s.tasks = append(s.tasks, task)
+	//append adiciona item em uma slice.
+	//Antes = [], Depois = [task].
+	//Se antes = [task1], Depois = [task1, task2].
+
+	return task
+	//Retorna a tarefa criada para a api responder ao usuário.
+
+}
+
+type CreateTaskRequest struct {
+	//Essa stuct representa o corpo da requisição POST /tasks.
+
+	Title string `json:"title"`
+}
+
+func main() {
+	//func main() = Função inicial do programa.
+
+	store := NewStore()
+	//Cria nossa Store em memória (Lugar para guardar tarefas).
+
+	mux := http.NewServeMux()
+	//Cria um roteador HTTP.
+	//mux = muxtiplexer -> roteador de rotas HTTP.
+
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		//mux.HandleFunc = Registra uma rota.
+		//Formato -> mux.HandleFunc("MÉTODO /caminho", função).
+		//"GET /healt" -> Quando alguém fizer GET /health, execute essa função.
+		//GET = Método HTTP para buscar dados.
+		// "/health" = Rota de saúde da aplicação.
+		//func(w http.ResponseWriter, r *http.Request) {} -> função anônima.
+		//w http.ResponseWriter -> w = Usado para escrever a resposta.
+		//w http.ResponseWriter -> com ele voce retorna -> status code, headers, JSON, texto, erro.
+		//r *http.Request -> r = representa a requisição recebida.
+		//r *http.Request -> Nele você encontra -> método HTTP, rota, body, headers, query params, contexto.
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			//Função auxiliar -> Responde JSON.
+			//http.StatusOK = status HTTP 200.
+			//map[string]any = objeto chave-valor -> "status": "ok", "time":   time.Now().
+			//map[string]any = mapa onde as chaves são strings, e os valores podem ser qualquer tipo.
+
+			"status": "ok",
+			"time":   time.Now(),
+		})
+	})
+
+	mux.HandleFunc("GET /tasks", func(w http.ResponseWriter, r *http.Request) {
+		tasks := store.ListTasks()
+		//Busca as tarefas guardadas na memória.
+
+		writeJSON(w, http.StatusOK, tasks)
+		//Responde a lista em JSON.
+
+	})
+
+	mux.HandleFunc("POST /tasks", func(w http.ResponseWriter, r *http.Request) {
+		//POST = usado para criar dados.
+
+		var body CreateTaskRequest
+		//Cria uma variável chamada body.
+		//Ela começa vazia.
+		//Tipo -> CreateTaskRequest.
+
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			//r.Body = Corpo da requisição.
+			//json.NewDecoder(r.Body) = Leitor de JSON a partir do body.
+			//.Decode(&body) = Tenta transformar o JSON em struct Go.
+			//&body = passe o endereço da variável body, para que o Decode consiga preenchê-la.
+			//Tratamento de erro -> if err := ...; != nil {} (padrão comum em Go).
+			//if err := ...; != nil {} = tente fazer algo; se der erro, trate o erro.
+
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				//http.StatusBadRequest = HTTP 400 (Dados inválidos).
+
+				"error": "invalid JSON body",
+			})
+			return
+			//parar a execução da função.
+		}
+		title := strings.TrimSpace(body.Title)
+		//Pega o título enviado e remove espaços.
+
+		if title == "" {
+			//Se o título for vazio, retorna erro.
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "title is required",
+			})
+			return
+		}
+
+		task := store.CreateTask(title)
+		//Chama nosso método -> CreateTask.
+		//CreateTask -> Cria a tarefa, salva na lista e retorna a tarefa criada.
+
+		writeJSON(w, http.StatusCreated, task)
+		//http.StatusCreated = 201 (recurso criado com sucesso).
+
+	})
+	log.Println("API running on http://localhost:8080")
+	//Mostra no terminal -> saber que o servidor iniciou.
+
+	log.Fatal(http.ListenAndServe(":8080", mux))
+	//Inicia o servidor HTTP.
+	//":8080" -> escute na porta 8080.
+	//mux -> roteador com as rotas: GET /health, GET /tasks, POST /tasks.
+	//ListenAndServe = fica rodando enquanto o servidor está ativo.
+	//Se der erro -> log.Fatal -> imprime o erro e encerra o programa.
+
+}
+
+func writeJSON(w http.ResponseWriter, status int, data any) {
+	//w http.ResponseWriter -> resposta HTTP.
+	//status int -> status code.
+	//data any -> qualquer dado para virar JSON.
+
+	w.Header().Set("Content-Type", "application/json")
+	//Define o header -> Content-Type:application/json.
+	//Content-Type:application/json -> avisa que a resposta está em JSON.
+
+	w.WriteHeader(status)
+	//Define o status HTTP -> 200(OK), 201(Created), 400(Bad Request).
+
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		//json.NewEncoder(w).Encode(data) -> Transforma o dado Go em JSON e escreve na resposta.
+
+		log.Println("failed to encode response:", err)
+		//Se der erro ao gerar JSON, ele mostra no terminal.
+	}
+}
