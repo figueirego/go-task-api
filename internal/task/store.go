@@ -1,9 +1,16 @@
 package task
 
 import (
-	"sync" //Serve para recursos de sincronização.
-	"time" //Serve para trabalhar com data e hora.
+	"errors" //Serve para criar erros simples.
+	"sync"   //Serve para recursos de sincronização.
+	"time"   //Serve para trabalhar com data e hora.
 )
+
+var ErrTaskNotFound = errors.New("task not found")
+
+//var -> Cria uma variável -> Estamos criando um erro reutilizável.
+//ErrTaskNotFound -> Maiúsculo = main.go, Minúsculo = apenas pacote task.
+//errors.New -> Cria um erro novo com a mensagem: task not found.
 
 type Store struct {
 	//Store será nosso "banco de dados em memória".
@@ -92,4 +99,85 @@ func (s *Store) CreateTask(title string) Task {
 	return task
 	//Retorna a tarefa criada para a api responder ao usuário.
 
+}
+
+func (s *Store) FindTaskById(id int) (Task, error) {
+	//Esse método pertence à Store.
+	//Recebe um id do tipo int.
+	//Retornar uma Task e um error.
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, task := range s.tasks {
+		//Percorre todas as tarefas.
+		//Range em Go serve para percorrer listas, maps, strings e outros tipos.
+		//for _, task := range s.tasks -> para cada task dentro de s.tasks.
+		//Quando usamos range em slice, ele retorna duas coisas -> index, value.
+		//Exemplo -> for index, task := range s.tasks
+		//Nesse método não precisamos do índice, só da tarefa.
+		//Usamos "_" para ignorar o índice -> for _, task := range s.tasks.
+
+		if task.ID == id {
+			return task, nil
+			//Se existir retorna isso.
+			//nil -> Ausência de valor.
+			//return task, nil -> achei a task, não houve erro.
+
+		}
+	}
+	return Task{}, ErrTaskNotFound
+	//Se não existir retorna isso.
+	//Task{} -> Task vazia.
+	//Task{} -> usamos porque a função precisa retornar uma Task, mesmo quando dá erro.
+
+}
+
+func (s *Store) UpdateTaskDone(id int, done bool) (Task, error) {
+	//Esse método muda o campo Done de uma tarefa.
+	//Recebe -> id = qual tarefa atualizar, done = novo valor true/false.
+	//Retorna -> Task atualizada, ou, erro, se não encontrar.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for index := range s.tasks {
+		//Aqui utilizamos index, pois precisamos alterar a tarefa dentro da lista.
+		//Se utilizasse "_", alteraria apenas a cópia temporária da task.
+
+		if s.tasks[index].ID == id {
+			s.tasks[index].Done = done
+			//Assim alteramos a tarefa real dentro da lista
+
+			return s.tasks[index], nil
+		}
+	}
+	return Task{}, ErrTaskNotFound
+}
+
+func (s *Store) DeleteTask(id int) error {
+	//Esse método remove uma task da lista.
+	//Recebe -> id da tarefa.
+	//Retorna -> error.
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for index := range s.tasks {
+		if s.tasks[index].ID == id {
+			s.tasks = append(s.tasks[:index], s.tasks[index+1:]...)
+			//Essa linha remove um item de uma slice.
+			//Exemplo -> tasks = [A, B, C]
+			//Queremos remover B, que está no índice 1 -> s.tasks[:index].
+			//s.tasks[:index] -> Pega tudo antes do índice, se index = 1 -> [A].
+			//s.tasks[index+1:] -> Pega tudo depois do índice, se index = 1 -> [C].
+			//append(s.tasks[:index], s.tasks[index+1:]...) -> [A] + [C] = [A, C].
+			//"..." -> espalham os elementos da slice.
+			//append -> append(lista, item)
+			//Vários itens de outra slice -> append(lista, outraLista...).
+
+			return nil
+		}
+	}
+
+	return ErrTaskNotFound
 }

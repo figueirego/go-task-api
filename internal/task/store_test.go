@@ -4,7 +4,10 @@ package task
 //Usando o mesmo package task.
 //Permite testar diretamente -> NewStore().
 
-import "testing"
+import (
+	"errors"  //Testar -> errors.Is(err, ErrTaskNotFound)
+	"testing" //Criar testes -> t *testing.T
+)
 
 //Traz o pacote oficial de testes do Go.
 //Permite criar testes usando funções como -> func TestAlgumaCoisa(t *testing.T) {}
@@ -112,5 +115,90 @@ func TestListTasksReturnsCreatedTasks(t *testing.T) {
 		//tasks[1] = Segunda task.
 
 		t.Errorf("expected first task title %q, got %q", "Estudar Docker", tasks[1].Title)
+	}
+}
+
+func TestFindTaskByID(t *testing.T) {
+	store := NewStore()
+
+	createdTask := store.CreateTask("Estudar busca por ID")
+
+	foundTask, err := store.FindTaskById(createdTask.ID)
+	if err != nil {
+		t.Errorf("error finding task by ID: %v", err)
+	}
+
+	if foundTask.ID != createdTask.ID {
+		t.Errorf("expected task ID %d, got %d", createdTask.ID, foundTask.ID)
+	}
+}
+
+func TestFindTaskByIDReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
+	store := NewStore()
+
+	_, err := store.FindTaskById(999)
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+
+	if !errors.Is(err, ErrTaskNotFound) {
+		t.Errorf("expected ErrTaskNotFound, got %v", err)
+	}
+}
+
+func TestUpdateTaskDone(t *testing.T) {
+	store := NewStore()
+
+	createdTask := store.CreateTask("Estudar update")
+
+	updatedTask, err := store.UpdateTaskDone(createdTask.ID, true)
+	if err != nil {
+		t.Errorf("error updating task done: %v", err)
+	}
+
+	if !updatedTask.Done {
+		t.Errorf("expected task Done true, got false")
+	}
+}
+
+func TestUpdateTaskDoneReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
+	store := NewStore()
+
+	_, err := store.UpdateTaskDone(999, true)
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+
+	if !errors.Is(err, ErrTaskNotFound) {
+		t.Errorf("expected ErrTaskNotFound, got %v", err)
+	}
+}
+
+func TestDeleteTask(t *testing.T) {
+	store := NewStore()
+
+	createdTask := store.CreateTask("Estudar delete")
+
+	err := store.DeleteTask(createdTask.ID)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	tasks := store.ListTasks()
+	if len(tasks) != 0 {
+		t.Errorf("expected 0 tasks, got %d", len(tasks))
+	}
+}
+
+func TestDeleteTaskReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
+	store := NewStore()
+
+	err := store.DeleteTask(999)
+	if err == nil {
+		t.Errorf("expected error, got nil")
+	}
+
+	if !errors.Is(err, ErrTaskNotFound) {
+		t.Errorf("expected ErrTaskNotFound, got %v", err)
 	}
 }

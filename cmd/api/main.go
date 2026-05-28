@@ -9,8 +9,10 @@ import (
 	//import serve para trazer código pronto de outros pacotes.
 
 	"encoding/json" //Serve para trabalhar com JSON.
+	"errors"        //Usamos para comparar erros.
 	"log"           //Serve para imprimir logs no terminal.
 	"net/http"      //Esse é o pacote HTTP nativo do Go. Permite criar servidor web sem framework externo.
+	"strconv"       //Serve para converter string para número e número para string.
 	"strings"       //Serve para manipular textos.
 	"time"          //Serve para trabalhar com data e hora.
 
@@ -22,6 +24,12 @@ type CreateTaskRequest struct {
 	//Essa stuct representa o corpo da requisição POST /tasks.
 
 	Title string `json:"title"`
+}
+
+type UpdateTaskRequest struct {
+	//Essa struct representa o body do PATCH.
+
+	Done bool `json:"done"`
 }
 
 func main() {
@@ -109,6 +117,121 @@ func main() {
 		//http.StatusCreated = 201 (recurso criado com sucesso).
 
 	})
+
+	mux.HandleFunc("GET /tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		//{id} -> Parâmetro de rota.
+
+		id, ok := parseIDParam(w, r)
+		if !ok {
+			return
+		}
+		//Parse do Id -> Chamamos uma função auxiliar para extrair e validar o ID.
+		//Retorna -> int e bool. -> id convertido e se deu certo ou não.
+		//Se ok for false, paramos com return.
+
+		foundTask, err := store.FindTaskById(id)
+		//Busca a task na Store.
+		//Deu certo -> fondTask = task encontrada, err = nil.
+		//Deu errado -> fondTask = task vazia, err = ErrTaskNotFound.
+
+		if err != nil {
+			//Se deu erro, entramos nesse bloco.
+
+			if errors.Is(err, task.ErrTaskNotFound) {
+				//Se o erro for "task not found" -> erro 404.
+				writeJSON(w, http.StatusNotFound, map[string]string{
+					//http.StatusNotFound -> status 404.
+					//significa recurso não encontrado.
+
+					"error": "task not found",
+				})
+				return
+			}
+
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				//Erro inesperado
+				//http.StatusInternalServerError -> status 500.
+				//Significa erro interno no servidor.
+
+				"error": "internal server error",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, foundTask)
+	})
+
+	mux.HandleFunc("PATCH /tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		//PATCH é usado para atualizar parcialmente um recurso.
+		//Não vamos atualizar a task inteira, apenas "done", por isso PATCH.
+
+		id, ok := parseIDParam(w, r)
+		if !ok {
+			return
+		}
+
+		var body UpdateTaskRequest
+
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			//Mesma lógica do POST.
+			//Criamos uma variável vazia e tentamos preencher com o JSON da request.
+
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "invalid JSON body",
+			})
+			return
+		}
+
+		updatedTask, err := store.UpdateTaskDone(id, body.Done)
+		//Chama o método da Store.
+		//Se achar a tarefa, atualiza.
+		//Se não achar, retorna erro.
+
+		if err != nil {
+			if errors.Is(err, task.ErrTaskNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{
+					"error": "task not found",
+				})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "internal server error",
+			})
+			return
+		}
+
+		writeJSON(w, http.StatusOK, updatedTask)
+	})
+
+	mux.HandleFunc("DELETE /tasks/{id}", func(w http.ResponseWriter, r *http.Request) {
+		//DELETE é usado para deletar um recurso.
+		//Significa -> delete a task de ID 1.
+
+		id, ok := parseIDParam(w, r)
+		if !ok {
+			return
+		}
+
+		if err := store.DeleteTask(id); err != nil {
+			if errors.Is(err, task.ErrTaskNotFound) {
+				writeJSON(w, http.StatusNotFound, map[string]string{
+					"error": "task not found",
+				})
+				return
+			}
+			writeJSON(w, http.StatusInternalServerError, map[string]string{
+				"error": "internal server error",
+			})
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+		//http.StatusNoContent -> status 204.
+		//Significa -> Deu certo, mas não há conteúdo para retornar.
+		//Por isso não usamos writeJSON aqui.
+
+	})
+
 	log.Println("API running on http://localhost:8080")
 	//Mostra no terminal -> saber que o servidor iniciou.
 
@@ -118,6 +241,38 @@ func main() {
 	//mux -> roteador com as rotas: GET /health, GET /tasks, POST /tasks.
 	//ListenAndServe = fica rodando enquanto o servidor está ativo.
 	//Se der erro -> log.Fatal -> imprime o erro e encerra o programa.
+
+}
+
+func parseIDParam(w http.ResponseWriter, r *http.Request) (int, bool) {
+	//Nova função auxiliar.
+	//Recebe -> w = resposta HTTP, r = request HTTP.
+	//Retorna -> int = ID convertido, bool = true se válido, false se inválido.
+
+	rawID := r.PathValue("id")
+	//PathValue("id") pega o valor da rota.
+
+	id, err := strconv.Atoi(rawID)
+	//Converte string para int.
+
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "invalid task id",
+		})
+		return 0, false
+	}
+	//Se o usuário chamar string (/tasks/abc, responde com invalid task id. (400)
+
+	if id <= 0 {
+		//Não queremos aceitar -> /tasks/0 ou /tasks/-1
+
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "invalid id must be positive",
+		})
+		return 0, false
+	}
+	return id, true
+	//Retorno de sucesso.
 
 }
 
