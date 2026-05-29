@@ -123,7 +123,7 @@ func TestFindTaskByID(t *testing.T) {
 
 	createdTask := store.CreateTask("Estudar busca por ID")
 
-	foundTask, err := store.FindTaskById(createdTask.ID)
+	foundTask, err := store.FindTaskByID(createdTask.ID)
 	if err != nil {
 		t.Errorf("error finding task by ID: %v", err)
 	}
@@ -136,7 +136,7 @@ func TestFindTaskByID(t *testing.T) {
 func TestFindTaskByIDReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
 	store := NewStore()
 
-	_, err := store.FindTaskById(999)
+	_, err := store.FindTaskByID(999)
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}

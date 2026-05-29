@@ -101,7 +101,7 @@ func (s *Store) CreateTask(title string) Task {
 
 }
 
-func (s *Store) FindTaskById(id int) (Task, error) {
+func (s *Store) FindTaskByID(id int) (Task, error) {
 	//Esse método pertence à Store.
 	//Recebe um id do tipo int.
 	//Retornar uma Task e um error.
