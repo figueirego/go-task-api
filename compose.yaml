@@ -1,0 +1,50 @@
+services:
+  #Define os serviços que o Docker vai subir.
+  #Serviço -> mysql.
+
+  mysql:
+    #mysql: -> nome do serviço.
+    #Quando rodar o Docker Compose, vai criar um container para o MySQL.
+
+    image: mysql:8.0
+    #Diz qual imagem Docker será usada.
+    #mysql:8.0 -> imagem oficial do MySQL na versão 8.0.
+
+    container_name: go-task-api-mysql
+    #Nome do container.
+    #Docker nomeia como -> go-task-api-mysql.
+
+    restart: unless-stopped
+    #significa -> se o container cair, tente subir de novo, a menos que eu tenha parado manualmente.
+
+    environment:
+      #Variáveis de ambiente usadas pelo MySQL ao iniciar.
+
+      MYSQL_ROOT_PASSWORD: root
+      #Senha do usuário root do MySQL.
+
+      MYSQL_DATABASE: go_task_api
+      #Cria automaticamente um banco chamado -> go_task_api.
+
+      MYSQL_USER: app
+      #Cria um usuário chamado -> *app*.
+
+      MYSQL_PASSWORD: app
+      #Define a senha do usuário *app*.
+
+    ports:
+      #expõe a porta do MySQL.
+
+      - "3307:3306"
+      #porta_do_dispositivo:porta_do_container
+      #A porta 3307 do computador aponta para a porta 3306 do container.
+
+    volumes:
+      #Salva os dados do MySQL num volume Docker.
+      #Sem isso, quando o container fosse removido, os dados poderiam sumir.
+
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:
+    #Declara o volume como -> mysql_data.
