@@ -20,7 +20,7 @@ import (
 	"time"          //Serve para trabalhar com data e hora.
 
 	"github.com/jomatheusdev/go-task-api/internal/task"
-	//Acessa o pacote interno e usa task.NewStore().
+	//Acessa o pacote interno e usa task.NewRepository().
 
 	_ "github.com/go-sql-driver/mysql"
 	//"_" -> importe esse pacote apenas pelos efeitos colaterais dele.
@@ -42,12 +42,12 @@ func main() {
 	//Fecha o banco quando o programa encerrar.
 	//defer = execute isso no final da função.
 
-	store := task.NewStore()
-	//Cria nossa Store em memória (Lugar para guardar tarefas).
+	repository := task.NewSQLRepository(db)
+	//Cria nossa Repository em memória (Lugar para guardar tarefas).
 
-	taskHandler := task.NewHandler(store)
-	//Cria o handler de tasks e entrega a Store para ele.
-	//main cria a Store -> main entrega a Store para o Handler -> Handler usa a Store.
+	taskHandler := task.NewHandler(repository)
+	//Cria o handler de tasks e entrega a Repository para ele.
+	//main cria a Repository -> main entrega a Repository para o Handler -> Handler usa a Repository.
 
 	mux := http.NewServeMux()
 	//Cria um roteador HTTP.

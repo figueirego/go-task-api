@@ -1,9 +1,10 @@
 package task
 
 import (
-	"errors" //Serve para criar erros simples.
-	"sync"   //Serve para recursos de sincronização.
-	"time"   //Serve para trabalhar com data e hora.
+	"context" //Representa o contexto da operação.
+	"errors"  //Serve para criar erros simples.
+	"sync"    //Serve para recursos de sincronização.
+	"time"    //Serve para trabalhar com data e hora.
 )
 
 var ErrTaskNotFound = errors.New("task not found")
@@ -35,12 +36,16 @@ func NewStore() *Store {
 	}
 }
 
-func (s *Store) ListTasks() []Task {
+//ctx context.Context -> request pode ser cancelada, dar timeout, interrompida, encerrada pelo cliente.
+//ctx context.Context -> permite passar esse controle para o banco, serviços externos, workers etc.
+//Mesmo que a Store em memória não use o ctx, o Repository SQL vai usar.
+
+func (s *Store) ListTasks(ctx context.Context) ([]Task, error) {
 	//Isso é um método.
 	//Um método é uma função ligada a um tipo.
 	//ListTasks pertence a Store.
 	//(s *Store) = receiver ->  Significa essa funçao pertence a Store.
-	// Na função Store = s. -> ex: s.tasks, s.mu...
+	//Na função Store = s. -> ex: s.tasks, s.mu...
 	//[]Task = Função retorna uma lista de Task.
 
 	s.mu.Lock()
@@ -62,12 +67,12 @@ func (s *Store) ListTasks() []Task {
 	//Copia as tarefas de s.tasks para copied
 	//É uma proteção simples, para não devolver a lista interna diretamente.
 
-	return copied
-	//Retorna a cópia da lista de tarefas
+	return copied, nil
+	//Retorna a cópia da lista de tarefas, não houve erro.
 
 }
 
-func (s *Store) CreateTask(title string) Task {
+func (s *Store) CreateTask(ctx context.Context, title string) (Task, error) {
 	//CreateTask é um método de Store.
 	//Ele recebe um title do tipo string.
 	//Ele retorna uma Task
@@ -96,12 +101,12 @@ func (s *Store) CreateTask(title string) Task {
 	//Antes = [], Depois = [task].
 	//Se antes = [task1], Depois = [task1, task2].
 
-	return task
+	return task, nil
 	//Retorna a tarefa criada para a api responder ao usuário.
 
 }
 
-func (s *Store) FindTaskByID(id int) (Task, error) {
+func (s *Store) FindTaskByID(ctx context.Context, id int) (Task, error) {
 	//Esse método pertence à Store.
 	//Recebe um id do tipo int.
 	//Retornar uma Task e um error.
@@ -133,7 +138,7 @@ func (s *Store) FindTaskByID(id int) (Task, error) {
 
 }
 
-func (s *Store) UpdateTaskDone(id int, done bool) (Task, error) {
+func (s *Store) UpdateTaskDone(ctx context.Context, id int, done bool) (Task, error) {
 	//Esse método muda o campo Done de uma tarefa.
 	//Recebe -> id = qual tarefa atualizar, done = novo valor true/false.
 	//Retorna -> Task atualizada, ou, erro, se não encontrar.
@@ -154,7 +159,7 @@ func (s *Store) UpdateTaskDone(id int, done bool) (Task, error) {
 	return Task{}, ErrTaskNotFound
 }
 
-func (s *Store) DeleteTask(id int) error {
+func (s *Store) DeleteTask(ctx context.Context, id int) error {
 	//Esse método remove uma task da lista.
 	//Recebe -> id da tarefa.
 	//Retorna -> error.

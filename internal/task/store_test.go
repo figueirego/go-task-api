@@ -5,6 +5,7 @@ package task
 //Permite testar diretamente -> NewStore().
 
 import (
+	"context"
 	"errors"  //Testar -> errors.Is(err, ErrTaskNotFound)
 	"testing" //Criar testes -> t *testing.T
 )
@@ -16,6 +17,7 @@ import (
 //t *testing.T -> Objeto que o Go entrega para o teste.
 //t *testing.T -> t = marcar erro, falhar teste, mostrar mensagem, criar subtestes.
 //t *testing.T -> t = t.Errorf(...).
+//context.Background() -> Cria um contexto básico, vazio.
 
 func TestNewStoreStartsEmpty(t *testing.T) {
 	//Testa se a Store começa vazia.
@@ -23,8 +25,12 @@ func TestNewStoreStartsEmpty(t *testing.T) {
 	store := NewStore()
 	//Cria uma Store nova.
 
-	tasks := store.ListTasks()
+	tasks, err := store.ListTasks(context.Background())
 	//Lista as tarefas. (esperamos lista vazia)
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 
 	if len(tasks) != 0 {
 		//len(tasks) pega o tamanho da lista.
@@ -43,8 +49,12 @@ func TestCreateTask(t *testing.T) {
 	store := NewStore()
 	//Começa do zero.
 
-	task := store.CreateTask("Estudar testes em Go")
+	task, err := store.CreateTask(context.Background(), "Estudar testes em Go")
 	//Cria uma task.
+
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 
 	if task.ID != 1 {
 		t.Errorf("expected task ID 1, got %d", task.ID)
@@ -79,8 +89,15 @@ func TestCreateTaskIncrementsID(t *testing.T) {
 
 	store := NewStore()
 
-	first := store.CreateTask("Primeira tarefa")
-	second := store.CreateTask("Segunda tarefa")
+	first, err := store.CreateTask(context.Background(), "Primeira tarefa")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	second, err := store.CreateTask(context.Background(), "Segunda tarefa")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 
 	if first.ID != 1 {
 		t.Errorf("expected first ID, got %d", first.ID)
@@ -96,12 +113,23 @@ func TestListTasksReturnsCreatedTasks(t *testing.T) {
 
 	store := NewStore()
 
-	store.CreateTask("Estudar Go")
-	store.CreateTask("Estudar Docker")
+	_, err := store.CreateTask(context.Background(), "Estudar Go")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	_, err = store.CreateTask(context.Background(), "Estudar Docker")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
 	//Não guardamos o retorno em variável porque não precisamos dele diretamente.
 	//Queremos que elas sejam salvas na Store.
 
-	tasks := store.ListTasks()
+	tasks, err := store.ListTasks(context.Background())
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 	//Pega a lista.
 
 	if len(tasks) != 2 {
@@ -114,16 +142,23 @@ func TestListTasksReturnsCreatedTasks(t *testing.T) {
 		//Acessando índice da lista -> tasks[0] = Primeira task.
 		//tasks[1] = Segunda task.
 
-		t.Errorf("expected first task title %q, got %q", "Estudar Docker", tasks[1].Title)
+		t.Errorf("expected first task title %q, got %q", "Estudar Go", tasks[0].Title)
+	}
+
+	if tasks[1].Title != "Estudar Docker" {
+		t.Errorf("expected second task title %q, got %q", "Estudar Docker", tasks[1].Title)
 	}
 }
 
 func TestFindTaskByID(t *testing.T) {
 	store := NewStore()
 
-	createdTask := store.CreateTask("Estudar busca por ID")
+	createdTask, err := store.CreateTask(context.Background(), "Estudar busca por ID")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 
-	foundTask, err := store.FindTaskByID(createdTask.ID)
+	foundTask, err := store.FindTaskByID(context.Background(), createdTask.ID)
 	if err != nil {
 		t.Errorf("error finding task by ID: %v", err)
 	}
@@ -136,7 +171,7 @@ func TestFindTaskByID(t *testing.T) {
 func TestFindTaskByIDReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
 	store := NewStore()
 
-	_, err := store.FindTaskByID(999)
+	_, err := store.FindTaskByID(context.Background(), 999)
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}
@@ -149,9 +184,12 @@ func TestFindTaskByIDReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
 func TestUpdateTaskDone(t *testing.T) {
 	store := NewStore()
 
-	createdTask := store.CreateTask("Estudar update")
+	createdTask, err := store.CreateTask(context.Background(), "Estudar update")
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
 
-	updatedTask, err := store.UpdateTaskDone(createdTask.ID, true)
+	updatedTask, err := store.UpdateTaskDone(context.Background(), createdTask.ID, true)
 	if err != nil {
 		t.Errorf("error updating task done: %v", err)
 	}
@@ -164,7 +202,7 @@ func TestUpdateTaskDone(t *testing.T) {
 func TestUpdateTaskDoneReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
 	store := NewStore()
 
-	_, err := store.UpdateTaskDone(999, true)
+	_, err := store.UpdateTaskDone(context.Background(), 999, true)
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}
@@ -177,14 +215,21 @@ func TestUpdateTaskDoneReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
 func TestDeleteTask(t *testing.T) {
 	store := NewStore()
 
-	createdTask := store.CreateTask("Estudar delete")
-
-	err := store.DeleteTask(createdTask.ID)
+	createdTask, err := store.CreateTask(context.Background(), "Estudar delete")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
 
-	tasks := store.ListTasks()
+	err = store.DeleteTask(context.Background(), createdTask.ID)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
+	tasks, err := store.ListTasks(context.Background())
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+
 	if len(tasks) != 0 {
 		t.Errorf("expected 0 tasks, got %d", len(tasks))
 	}
@@ -193,7 +238,7 @@ func TestDeleteTask(t *testing.T) {
 func TestDeleteTaskReturnsErrorWhenTaskDoesNotExist(t *testing.T) {
 	store := NewStore()
 
-	err := store.DeleteTask(999)
+	err := store.DeleteTask(context.Background(), 999)
 	if err == nil {
 		t.Errorf("expected error, got nil")
 	}

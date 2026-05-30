@@ -6,6 +6,7 @@ package task
 //"github.com/jomatheusdev/go-task-api/internal/task", já está dentro do proprio package task.
 
 import (
+	"context"
 	"encoding/json" //Serve para ler e escrever JSON.
 	"errors"        //Serve para comparar erros.
 	"log"           //Serve para imprimir erro no terminal.
@@ -14,10 +15,17 @@ import (
 	"strings"       //Remove espaços do começo e do fim.
 )
 
+type Repository interface {
+	ListTasks(ctx context.Context) ([]Task, error)
+	CreateTask(ctx context.Context, title string) (Task, error)
+	FindTaskByID(ctx context.Context, id int) (Task, error)
+	UpdateTaskDone(ctx context.Context, id int, done bool) (Task, error)
+	DeleteTask(ctx context.Context, id int) error
+}
 type Handler struct {
 	//Criamos um tipo chamado Handler.
 
-	store *Store
+	repository Repository
 	//O Handler guarda uma refêrencia para a Store.
 	//Store é onde estão as tarefas em memória
 	//Em main.go acessava diretamente, agora quem faz isso é o Handler.
@@ -38,7 +46,7 @@ type UpdateTaskDoneRequest struct {
 
 }
 
-func NewHandler(store *Store) *Handler {
+func NewHandler(repository Repository) *Handler {
 	//Essa função cria um novo Handler.
 	//Recebe uma Store.
 	//Retorna um ponteiro para Handler.
@@ -49,7 +57,7 @@ func NewHandler(store *Store) *Handler {
 	//main monta as dependências, handler só usa as dependências.
 
 	return &Handler{
-		store: store,
+		repository: repository,
 	}
 }
 
@@ -71,10 +79,14 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	//w = usado para responder.
 	//r = representa a request recebida.
 
-	tasks := h.store.ListTasks()
+	tasks, err := h.repository.ListTasks(r.Context())
+	if err != nil {
+		handleStoreError(w, err)
+		return
+	}
 	//Busca tarefas.
 	//Antes = store.ListTasks().
-	//Agora = h.store.ListTasks().
+	//Agora = h.repository.ListTasks().
 
 	writeJSON(w, http.StatusOK, tasks)
 	//Responder JSON.
@@ -120,7 +132,11 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	task := h.store.CreateTask(title)
+	task, err := h.repository.CreateTask(r.Context(), title)
+	if err != nil {
+		handleStoreError(w, err)
+		return
+	}
 	//Chama nosso método -> CreateTask.
 	//CreateTask -> Cria a tarefa, salva na lista e retorna a tarefa criada.
 
@@ -144,7 +160,7 @@ func (h *Handler) FindTaskByID(w http.ResponseWriter, r *http.Request) {
 	//Retorna -> int e bool. -> id convertido e se deu certo ou não.
 	//Se ok for false, paramos com return.
 
-	foundTask, err := h.store.FindTaskByID(id)
+	foundTask, err := h.repository.FindTaskByID(r.Context(), id)
 	//Busca a task na Store.
 	//Deu certo -> fondTask = task encontrada, err = nil.
 	//Deu errado -> fondTask = task vazia, err = ErrTaskNotFound.
@@ -183,7 +199,7 @@ func (h *Handler) UpdateTaskDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedTask, err := h.store.UpdateTaskDone(id, body.Done)
+	updatedTask, err := h.repository.UpdateTaskDone(r.Context(), id, body.Done)
 	//Chama o método da Store.
 	//Se achar a tarefa, atualiza.
 	//Se não achar, retorna erro.
@@ -208,7 +224,7 @@ func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.store.DeleteTask(id); err != nil {
+	if err := h.repository.DeleteTask(r.Context(), id); err != nil {
 		handleStoreError(w, err)
 		return
 	}
